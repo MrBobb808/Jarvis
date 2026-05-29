@@ -1,10 +1,10 @@
 # JARVIS
 
 A personal, voice-driven AI assistant — a dark, arc-reactor style interface with
-voice in/out, a live conversational core powered by Claude, and a morning brief
-that pulls from your Gmail, Google Calendar, and Google Drive.
+voice in/out, a live conversational core powered by OpenAI's GPT, and a morning
+brief that pulls from your Gmail, Google Calendar, and Google Drive.
 
-![status](https://img.shields.io/badge/stack-Next.js%2016%20·%20Claude%20·%20Google%20APIs-22d3ee)
+![status](https://img.shields.io/badge/stack-Next.js%2016%20·%20GPT--4o%20·%20Google%20APIs-22d3ee)
 
 ## Features
 
@@ -14,7 +14,7 @@ that pulls from your Gmail, Google Calendar, and Google Drive.
 - **Voice output** — natural **ElevenLabs** voice when configured, with an
   automatic fallback to browser Speech Synthesis. Mute toggle and optional
   auto-listen for hands-free back-and-forth.
-- **Conversational core** — Claude with streaming responses and tool use, so it
+- **Conversational core** — GPT-4o with streaming responses and tool use, so it
   can actually read your inbox/calendar/Drive to answer.
 - **Morning brief** — on load it summarizes your day: today's schedule, notable
   emails, and recent files.
@@ -28,14 +28,15 @@ cp .env.example .env.local   # then fill in the keys (see below)
 npm run dev                  # http://localhost:3000
 ```
 
-The UI, voice in/out, and orb work immediately. Conversation needs an Anthropic
+The UI, voice in/out, and orb work immediately. Conversation needs an OpenAI
 key; the brief and email/calendar/Drive tools need Google OAuth.
 
 ## Configuration
 
-### 1. Claude (required for conversation)
+### 1. OpenAI (required for conversation)
 
-Add an `ANTHROPIC_API_KEY` from the [Anthropic console](https://console.anthropic.com/settings/keys).
+Add an `OPENAI_API_KEY` from the [OpenAI platform](https://platform.openai.com/api-keys).
+Override the model with `OPENAI_MODEL` (defaults to `gpt-4o`).
 
 ### Optional: ElevenLabs (natural voice)
 
@@ -62,30 +63,32 @@ src/
   app/
     page.tsx                        # main interface
     api/
-      chat/route.ts                 # streaming Claude loop with tool use (SSE)
+      chat/route.ts                 # streaming GPT loop with tool use (SSE)
       brief/route.ts                # morning brief
+      tts/route.ts                  # ElevenLabs voice (streamed audio)
       auth/google/route.ts          # OAuth start
       auth/google/callback/route.ts # OAuth callback → stores tokens
       google/status/route.ts        # connection status + disconnect
   components/  VoiceOrb · ChatLog · MorningBrief
-  hooks/       useJarvis · useSpeechRecognition · useSpeechSynthesis · useMicLevel
-  lib/         anthropic · google · tools · tokens · types
+  hooks/       useJarvis · useSpeechRecognition · useSpeech · useMicLevel
+  lib/         openai · google · tools · tokens · types
 ```
 
-The chat route runs an agentic loop: Claude may call `get_recent_emails`,
+The chat route runs an agentic loop: the model may call `get_recent_emails`,
 `get_calendar_events`, `search_drive`, or `get_current_datetime`; results are fed
 back until it produces a final answer, which is streamed token-by-token to the UI.
 
 ## Deploy
 
-Deploys cleanly to **Vercel**. Set `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_ID`, and
-`GOOGLE_CLIENT_SECRET` as environment variables, and add your production callback
-URL (`https://<your-domain>/api/auth/google/callback`) to the Google OAuth client.
+Deploys cleanly to **Vercel**. Set `OPENAI_API_KEY`, `GOOGLE_CLIENT_ID`, and
+`GOOGLE_CLIENT_SECRET` as environment variables (plus optional `ELEVENLABS_API_KEY`),
+and add your production callback URL
+(`https://<your-domain>/api/auth/google/callback`) to the Google OAuth client.
 
 ## Notes & roadmap
 
 - Voice recognition uses the Web Speech API (best support in Chrome/Edge).
-- For a more natural voice, swap the browser TTS for ElevenLabs in
-  `useSpeechSynthesis`.
+- Voice output uses ElevenLabs when `ELEVENLABS_API_KEY` is set, falling back to
+  the browser's built-in TTS otherwise (see `useSpeech`).
 - Next steps toward the full vision: multi-account Google, YouTube Data API,
   persistent memory, and a mobile shell.

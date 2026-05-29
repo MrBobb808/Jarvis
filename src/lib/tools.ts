@@ -1,4 +1,4 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import type OpenAI from "openai";
 import {
   getAuthedClient,
   listCalendarEvents,
@@ -6,64 +6,76 @@ import {
   searchDrive,
 } from "./google";
 
-/** Tool schema advertised to Claude. */
-export const TOOL_DEFS: Anthropic.Tool[] = [
+/** Tool schema advertised to the model (OpenAI function-calling format). */
+export const TOOL_DEFS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
-    name: "get_recent_emails",
-    description:
-      "Read the user's recent Gmail messages. Use for questions about email, unread messages, or what's in the inbox.",
-    input_schema: {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description:
-            "Optional Gmail search query, e.g. 'is:unread', 'from:boss@x.com', 'newer_than:2d'. Defaults to the inbox.",
+    type: "function",
+    function: {
+      name: "get_recent_emails",
+      description:
+        "Read the user's recent Gmail messages. Use for questions about email, unread messages, or what's in the inbox.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description:
+              "Optional Gmail search query, e.g. 'is:unread', 'from:boss@x.com', 'newer_than:2d'. Defaults to the inbox.",
+          },
+          max: {
+            type: "number",
+            description: "Max messages to return (default 8, max 20).",
+          },
         },
-        max: {
-          type: "number",
-          description: "Max messages to return (default 8, max 20).",
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_calendar_events",
+      description:
+        "List events from the user's primary Google Calendar. Use for questions about the schedule, meetings, or what's coming up. Defaults to the rest of today.",
+      parameters: {
+        type: "object",
+        properties: {
+          timeMin: { type: "string", description: "ISO start time. Defaults to now." },
+          timeMax: { type: "string", description: "ISO end time. Defaults to end of today." },
+          max: { type: "number", description: "Max events (default 10)." },
         },
       },
     },
   },
   {
-    name: "get_calendar_events",
-    description:
-      "List events from the user's primary Google Calendar. Use for questions about the schedule, meetings, or what's coming up. Defaults to the rest of today.",
-    input_schema: {
-      type: "object",
-      properties: {
-        timeMin: { type: "string", description: "ISO start time. Defaults to now." },
-        timeMax: { type: "string", description: "ISO end time. Defaults to end of today." },
-        max: { type: "number", description: "Max events (default 10)." },
+    type: "function",
+    function: {
+      name: "search_drive",
+      description:
+        "Search the user's Google Drive by file name. Use when the user asks to find a document, sheet, or file.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Text to match in the file name." },
+          max: { type: "number", description: "Max files (default 8)." },
+        },
       },
     },
   },
   {
-    name: "search_drive",
-    description:
-      "Search the user's Google Drive by file name. Use when the user asks to find a document, sheet, or file.",
-    input_schema: {
-      type: "object",
-      properties: {
-        query: { type: "string", description: "Text to match in the file name." },
-        max: { type: "number", description: "Max files (default 8)." },
-      },
+    type: "function",
+    function: {
+      name: "get_current_datetime",
+      description:
+        "Get the current date and time. Use before reasoning about relative dates like 'today' or 'tomorrow'.",
+      parameters: { type: "object", properties: {} },
     },
-  },
-  {
-    name: "get_current_datetime",
-    description:
-      "Get the current date and time. Use before reasoning about relative dates like 'today' or 'tomorrow'.",
-    input_schema: { type: "object", properties: {} },
   },
 ];
 
 const NOT_CONNECTED =
   "Google is not connected. Tell the user to connect their Google account using the Connect button.";
 
-/** Execute a tool call and return a string result for Claude. */
+/** Execute a tool call and return a string result for the model. */
 export async function executeTool(
   name: string,
   input: Record<string, unknown>,

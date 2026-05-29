@@ -1,4 +1,4 @@
-import { getAnthropic, MODEL } from "@/lib/anthropic";
+import { getOpenAI, MODEL } from "@/lib/openai";
 import {
   getAuthedClient,
   getUserProfile,
@@ -44,7 +44,7 @@ export async function GET() {
   ]);
 
   let summary = "";
-  const client = getAnthropic();
+  const client = getOpenAI();
   if (client) {
     try {
       const facts = JSON.stringify({
@@ -53,18 +53,19 @@ export async function GET() {
         events: events.map((e) => ({ summary: e.summary, start: e.start })),
         recentFiles: files.map((f) => f.name),
       });
-      const msg = await client.messages.create({
+      const completion = await client.chat.completions.create({
         model: MODEL,
         max_tokens: 350,
-        system:
-          "You are JARVIS giving a spoken morning brief. Write 3-5 natural sentences, no markdown, no lists. Lead with the schedule and anything time-sensitive, then notable emails. Be warm and concise. Do not invent anything not in the data.",
-        messages: [{ role: "user", content: `Here is the data:\n${facts}\n\nGive the brief.` }],
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are JARVIS giving a spoken morning brief. Write 3-5 natural sentences, no markdown, no lists. Lead with the schedule and anything time-sensitive, then notable emails. Be warm and concise. Do not invent anything not in the data.",
+          },
+          { role: "user", content: `Here is the data:\n${facts}\n\nGive the brief.` },
+        ],
       });
-      summary = msg.content
-        .filter((b) => b.type === "text")
-        .map((b) => (b as { text: string }).text)
-        .join(" ")
-        .trim();
+      summary = completion.choices[0]?.message?.content?.trim() || "";
     } catch {
       summary = "";
     }

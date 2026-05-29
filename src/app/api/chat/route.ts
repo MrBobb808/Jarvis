@@ -1,5 +1,5 @@
-import type Anthropic from "@anthropic-ai/sdk";
-import { getAnthropic, MODEL, SYSTEM_PROMPT } from "@/lib/anthropic";
+import type OpenAI from "openai";
+import { getOpenAI, MODEL, SYSTEM_PROMPT } from "@/lib/openai";
 import { TOOL_DEFS, executeTool } from "@/lib/tools";
 import type { ChatMessage, ChatStreamEvent } from "@/lib/types";
 
@@ -15,30 +15,26 @@ const STATUS_FOR_TOOL: Record<string, string> = {
   get_current_datetime: "One moment…",
 };
 
+interface ToolAcc {
+  id: string;
+  name: string;
+  args: string;
+}
+
 export async function POST(req: Request) {
-  const client = getAnthropic();
+  const client = getOpenAI();
   if (!client) {
     return Response.json(
-      { error: "ANTHROPIC_API_KEY is not configured on the server." },
+      { error: "OPENAI_API_KEY is not configured on the server." },
       { status: 503 },
     );
   }
 
   const body = (await req.json()) as { messages: ChatMessage[] };
-  const messages: Anthropic.MessageParam[] = (body.messages || []).map((m) => ({
-    role: m.role,
-    content: m.content,
-  }));
-
-  // Cache the static system prompt + tool schema across turns.
-  const system: Anthropic.TextBlockParam[] = [
-    { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...(body.messages || []).map((m) => ({ role: m.role, content: m.content })),
   ];
-  const tools: Anthropic.Tool[] = TOOL_DEFS.map((t, i) =>
-    i === TOOL_DEFS.length - 1
-      ? { ...t, cache_control: { type: "ephemeral" } }
-      : t,
-  );
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -49,45 +45,71 @@ export async function POST(req: Request) {
       let finalText = "";
       try {
         for (let turn = 0; turn < MAX_TURNS; turn++) {
-          const ms = client.messages.stream({
+          const completion = await client.chat.completions.create({
             model: MODEL,
             max_tokens: 1024,
-            system,
-            tools,
             messages,
+            tools: TOOL_DEFS,
+            tool_choice: "auto",
+            stream: true,
           });
 
-          ms.on("text", (delta) => {
-            finalText += delta;
-            send({ type: "token", text: delta });
-          });
+          let content = "";
+          const toolAcc: Record<number, ToolAcc> = {};
 
-          const msg = await ms.finalMessage();
+          for await (const chunk of completion) {
+            const delta = chunk.choices[0]?.delta;
+            if (!delta) continue;
 
-          if (msg.stop_reason !== "tool_use") {
-            break;
+            if (delta.content) {
+              content += delta.content;
+              finalText += delta.content;
+              send({ type: "token", text: delta.content });
+            }
+
+            for (const tc of delta.tool_calls ?? []) {
+              const idx = tc.index;
+              const acc = (toolAcc[idx] ??= { id: "", name: "", args: "" });
+              if (tc.id) acc.id = tc.id;
+              if (tc.function?.name) acc.name += tc.function.name;
+              if (tc.function?.arguments) acc.args += tc.function.arguments;
+            }
           }
 
-          // Run every requested tool, feed results back, loop.
-          messages.push({ role: "assistant", content: msg.content });
-          const toolResults: Anthropic.ToolResultBlockParam[] = [];
-          for (const block of msg.content) {
-            if (block.type !== "tool_use") continue;
+          const calls = Object.values(toolAcc).filter((c) => c.name);
+          if (calls.length === 0) {
+            break; // model produced a final answer
+          }
+
+          // Record the assistant's tool-call turn, then run each tool.
+          messages.push({
+            role: "assistant",
+            content: content || null,
+            tool_calls: calls.map((c) => ({
+              id: c.id,
+              type: "function",
+              function: { name: c.name, arguments: c.args || "{}" },
+            })),
+          });
+
+          for (const c of calls) {
             send({
               type: "status",
-              text: STATUS_FOR_TOOL[block.name] || "Working on it…",
+              text: STATUS_FOR_TOOL[c.name] || "Working on it…",
             });
-            const result = await executeTool(
-              block.name,
-              (block.input as Record<string, unknown>) || {},
-            );
-            toolResults.push({
-              type: "tool_result",
-              tool_use_id: block.id,
+            let input: Record<string, unknown> = {};
+            try {
+              input = c.args ? JSON.parse(c.args) : {};
+            } catch {
+              /* malformed args — pass empty */
+            }
+            const result = await executeTool(c.name, input);
+            messages.push({
+              role: "tool",
+              tool_call_id: c.id,
               content: result,
             });
           }
-          messages.push({ role: "user", content: toolResults });
         }
 
         send({ type: "done", text: finalText.trim() });

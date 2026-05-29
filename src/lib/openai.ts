@@ -1,13 +1,13 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
-/** Lazily build the Anthropic client so the app boots even without a key. */
-export function getAnthropic(): Anthropic | null {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+/** Lazily build the OpenAI client so the app boots even without a key. */
+export function getOpenAI(): OpenAI | null {
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
-  return new Anthropic({ apiKey });
+  return new OpenAI({ apiKey });
 }
 
-export const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+export const MODEL = process.env.OPENAI_MODEL || "gpt-4o";
 
 export const SYSTEM_PROMPT = `You are JARVIS, a personal AI assistant inspired by Tony Stark's assistant — calm, precise, warm, and quietly witty. You speak to one principal user and act on their behalf.
 
