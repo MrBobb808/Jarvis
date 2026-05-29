@@ -11,8 +11,9 @@ that pulls from your Gmail, Google Calendar, and Google Drive.
 - **Animated voice orb** — canvas HUD that reacts to your mic level and the
   assistant's state (idle / listening / thinking / speaking).
 - **Voice input** — Web Speech API (browser-native, no key needed).
-- **Voice output** — Web Speech Synthesis; mute toggle and optional auto-listen
-  for hands-free back-and-forth.
+- **Voice output** — natural **ElevenLabs** voice when configured, with an
+  automatic fallback to browser Speech Synthesis. Mute toggle and optional
+  auto-listen for hands-free back-and-forth.
 - **Conversational core** — Claude with streaming responses and tool use, so it
   can actually read your inbox/calendar/Drive to answer.
 - **Morning brief** — on load it summarizes your day: today's schedule, notable
@@ -35,6 +36,11 @@ key; the brief and email/calendar/Drive tools need Google OAuth.
 ### 1. Claude (required for conversation)
 
 Add an `ANTHROPIC_API_KEY` from the [Anthropic console](https://console.anthropic.com/settings/keys).
+
+### Optional: ElevenLabs (natural voice)
+
+Add `ELEVENLABS_API_KEY` for a far more natural voice; otherwise the browser's
+built-in TTS is used. Customize the voice with `ELEVENLABS_VOICE_ID`.
 
 ### 2. Google (required for Gmail / Calendar / Drive)
 

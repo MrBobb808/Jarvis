@@ -9,7 +9,7 @@ import type {
 } from "@/lib/types";
 import { useMicLevel } from "./useMicLevel";
 import { useSpeechRecognition } from "./useSpeechRecognition";
-import { useSpeechSynthesis } from "./useSpeechSynthesis";
+import { useSpeech } from "./useSpeech";
 
 interface GoogleStatus {
   configured: boolean;
@@ -32,7 +32,7 @@ export function useJarvis() {
     connected: false,
   });
 
-  const tts = useSpeechSynthesis();
+  const tts = useSpeech();
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
   const autoListenRef = useRef(autoListen);
